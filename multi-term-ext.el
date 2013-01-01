@@ -186,5 +186,5 @@ a GNU screen session name."
     term-buffer))
 
 ;; End:
-
-;;; multi-term.el ends here
+(provide 'multi-term-ext)
+;;; multi-term-ext.el ends here
