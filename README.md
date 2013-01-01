@@ -36,8 +36,8 @@ This package provides 3 main interactive functions:
 
 ### Customizations
 
-* In case you want to connect to a remote host through SSH using a port different
-  than 22. Use the `multi-term-remote-ssh-port' option.
+* In case you want to connect to a remote host through SSH using a
+  port different than 22. Use the `multi-term-remote-ssh-port' option.
 
   ```elisp
   (setq multi-term-remote-ssh-port "2222")
@@ -46,8 +46,8 @@ This package provides 3 main interactive functions:
 
   ```
 
-* You can also run other interactive process like irb or ipython using
-  a multi-term-remote-persistent like so
+* You can also run other interactive process like `irb` or `ipython`
+  using a `multi-term-remote-persistent` like so:
 
   ```elisp
   ;; assuming your irb binary is on /usr/local/bin on the remote machine
