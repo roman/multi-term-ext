@@ -50,6 +50,11 @@
 ;; `multi-term-remote' Creates a new local term buffer using a session on GNU screen.
 ;; `multi-term-remote-persistent' Creates a new local term buffer using a session on GNU screen.
 ;;
+;; Variables that you can set:
+;;
+;; `multi-term-ext-screen-session-name' Default screen session name (default: nil)
+;; `multi-term-ext-remote-host' Default remote host address (default: nil)
+;;
 
 ;;; Change log:
 ;;
@@ -82,89 +87,154 @@
 
 ;;; Code:
 
-(defun -multi-term-get-buffer-ext (&optional special-shell dedicated-window)
-  "Get term buffer.
-If option SPECIAL-SHELL is `non-nil', will use shell from user input.
-If option DEDICATED-WINDOW is `non-nil' will create dedicated `multi-term' window ."
-  (with-temp-buffer
-    (let ((shell-name (or multi-term-program ;shell name
-                          (getenv "SHELL")
-                          (getenv "ESHELL")
-                          "/bin/sh"))
-          term-list-length ;get length of term list
-          index ;setup new term index
-          term-name) ;term name
-      (if dedicated-window
-          (setq term-name multi-term-dedicated-buffer-name)
-        ;; Compute index.
-        (setq term-list-length (length (multi-term-list)))
-        (setq index (if term-list-length (1+ term-list-length) 1))
-        ;; switch to current local directory,
-        ;; if in-existence, switch to `multi-term-default-dir'.
-        (cd (or default-directory (expand-file-name multi-term-default-dir)))
-        ;; adjust value N when max index of term buffer is less than length of term list
-        (while (buffer-live-p (get-buffer (format "*%s<%s>*" multi-term-buffer-name index)))
-          (setq index (1+ index)))
-        (setq term-name (format "%s<%s>" multi-term-buffer-name index)))
-      ;; Try get other shell name if `special-shell' is non-nil.
-      (if special-shell
-          (setq shell-name (read-from-minibuffer "Run program: " shell-name)))
-      ;; Make term, details to see function `make-term' in `term.el'.
-      (if multi-term-program-switches
-          (apply #'make-term term-name shell-name nil multi-term-program-switches)
-        (make-term term-name shell-name)))))
+(defcustom multi-term-ext-screen-session-name nil
+  "Default GNU screen session name")
+(defcustom multi-term-ext-remote-host nil
+  "Default remote host SSH address (e.g user@host)")
 
-(defun multi-term-remote (user+host)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun -multi-term-ext-buffer-name (buffer-name &optional index)
+  (if index
+      (format "%s<%s>"
+              buffer-name
+              current-index)
+    (format "%s" buffer-name)))
+
+(defun -multi-term-ext-next-buffer-name (&optional buffer-name)
+  (let* ((term-count        (length (multi-term-list)))
+         (current-index     nil)
+         (buffer-name       (or buffer-name
+                                multi-term-buffer-name)))
+    (while (buffer-live-p
+            (get-buffer
+             (format "*%s*"
+                     (-multi-term-ext-buffer-name
+                      buffer-name
+                      current-index))))
+      (setq current-index (if term-count (1+ term-count) 1)))
+    (-multi-term-ext-buffer-name buffer-name current-index)))
+
+(defun -multi-term-ext-get-buffer ()
+  "Get term buffer."
+  (with-temp-buffer
+    (let* ((shell-name (or multi-term-program ;shell name
+                           (getenv "SHELL")
+                           (getenv "ESHELL")
+                           "/bin/sh"))
+           (buffer-name (-multi-term-ext-next-buffer-name))
+           (current-directory (or default-directory
+                                  (expand-file-name multi-term-default-dir)))
+           (term-buffer (if multi-term-program-switches
+                            (apply #'make-term
+                                   buffer-name shell-name nil multi-term-program-switches)
+                          (make-term buffer-name shell-name))))
+      (with-current-buffer term-buffer
+        (multi-term-internal))
+      (switch-to-buffer term-buffer)
+      term-buffer)))
+
+;;; derived from http://www.enigmacurry.com/2008/12/26/emacs-ansi-term-tricks/
+;;; stolen from http://github.com/tavisrudd/emacs.d
+(defun multi-term-ext-setup-tramp ()
+  "Setup ansi-term/tramp remote directory tracking
+   NOTE:  this appears to have some sort of timing bug in it and doesn't always work"
+  (interactive)
+  (term-send-raw-string
+   (concat "
+function eterm_set_variables {
+    local emacs_host=\"" (car (split-string (system-name) "\\.")) "\"
+    local tramp_hostname=${TRAMP_HOSTNAME-$(hostname)}
+    if [[ $TERM == \"eterm-color\" ]]; then
+        if [[ $tramp_hostname != \"$emacs_host\" ]]; then
+            echo -e \"\\033AnSiTu\" ${TRAMP_USERNAME-$(whoami)}
+            echo -e \"\\033AnSiTh\" $tramp_hostname
+        fi
+        echo -e \"\\033AnSiTc\" $(pwd)
+    elif [[ $TERM == \"screen\" || $TERM  == \"screen-256color\" ]]; then
+        if [[ $tramp_hostname != \"$emacs_host\" ]]; then
+            echo -e \"\\033P\\033AnSiTu\\033\\\\\" ${TRAMP_USERNAME-$(whoami)}
+            echo -e \"\\033P\\033AnSiTh\\033\\\\\" $tramp_hostname
+        fi
+        echo -e \"\\033P\\033AnSiTc\\033\\\\\" $(pwd)
+    fi
+}
+function eterm_tramp_init {
+    for temp in cd pushd popd; do
+        alias $temp=\"eterm_set_cwd $temp\"
+    done
+
+    # set hostname, user, and cwd now
+    eterm_set_variables
+}
+function eterm_set_cwd {
+    $@
+    eterm_set_variables
+}
+eterm_tramp_init
+export -f eterm_tramp_init
+export -f eterm_set_variables
+export -f eterm_set_cwd
+clear
+echo \"tramp initialized\"
+")))
+
+(defun multi-term-remote (&optional user+host buffer-name)
   "Creates a multi-term in a remote host. A user + host (e.g
 user@host) value will be required to perform the connection."
-  (interactive "sSSH addeess (e.g user@host): ")
-  (let* ((term-list-length (length (multi-term-list)))
-         (index (if term-list-length (1+ term-list-length) 1))
-
+  (interactive)
+  (let* ((user+host (or user+host
+                        multi-term-ext-remote-host
+                        (read-from-minibuffer "SSH addeess (e.g user@host): ")))
          (multi-term-program "ssh")
-         (multi-term-buffer-name "remote-term")
+         (multi-term-buffer-name (or buffer-name
+                                     multi-term-buffer-name
+                                     "remote-terminal"))
          (multi-term-program-switches (append
                                        multi-term-program-switches
                                        (list user+host)))
-         term-buffer)
-    (setq term-buffer (-multi-term-get-buffer-ext))
-    (set-buffer term-buffer)
-    (while (buffer-live-p (get-buffer (format "*%s<%s>*" multi-term-buffer-name index)))
-      (setq index (1+ index)))
-    (setq term-name (format "%s<%s>" multi-term-buffer-name index))
-    (rename-buffer (format "*%s*" term-name))
-    (multi-term-internal)
-    (switch-to-buffer term-buffer)
+         (term-buffer (-multi-term-ext-get-buffer)))
+    (with-current-buffer term-buffer
+      (multi-term-ext-setup-tramp))
     term-buffer))
 
-(defun multi-term-persistent (session-name &optional screen-shell)
+(defun multi-term-persistent (&optional session-name buffer-name screen-shell)
   "Creates a multi-term inside a GNU screen session. A screen
 session name is required."
-  (interactive "sSession name: ")
-  (let* ((session-name  (or session-name
-                            multi-term-screen-session-name))
-         (screen-shell (or screen-shell multi-term-program))
+  (interactive)
+  (let* ((session-name (or session-name
+                           multi-term-ext-screen-session-name
+                           (read-from-minibuffer "Session name: ")))
+         (screen-shell (or screen-shell
+                           multi-term-program
+                           (read-from-minibuffer "Program name: ")))
+         (multi-term-buffer-name (or buffer-name
+                                     multi-term-buffer-name
+                                     session-name))
          (multi-term-program "screen")
          (multi-term-program-switches (append multi-term-program-switches
                                               (list "-x" "-R"
                                                     "-S" session-name
-                                                    "-s" screen-shell)))
-         term-buffer)
-    (setq term-buffer (-multi-term-get-buffer-ext))
-    (set-buffer term-buffer)
-    (rename-buffer (format "*%s*" session-name))
-    (multi-term-internal)
-    (switch-to-buffer term-buffer)
-    term-buffer))
+                                                    "-s" screen-shell))))
+    (-multi-term-ext-get-buffer)))
 
-(defun multi-term-remote-persistent (user+host session-name &optional screen-shell)
+(defun multi-term-remote-persistent (&optional user+host session-name buffer-name screen-shell)
   "Creates multi-term buffer on a GNU screen session in a remote
 host. A user + host (e.g user@host) value is required as well as
 a GNU screen session name."
-  (interactive "sSSH addeess (e.g user@host): \nsSession name: ")
+  (interactive)
   (let* ((session-name (or session-name
-                           multi-term-screen-session-name))
-         (screen-shell (or screen-shell multi-term-program))
+                           multi-term-ext-screen-session-name
+                           (read-from-minibuffer "Session name: ")))
+         (screen-shell (or screen-shell
+                           multi-term-program
+                           (read-from-minibuffer "Program path: ")))
+         (user+host (or user+host
+                        multi-term-ext-remote-host
+                        (read-from-minibuffer "SSH addeess (e.g user@host): ")))
+         (multi-term-buffer-name (or buffer-name
+                                     multi-term-buffer-name
+                                     session-name))
          (multi-term-program "ssh")
          (multi-term-program-switches (append
                                        multi-term-program-switches
@@ -177,12 +247,9 @@ a GNU screen session name."
                                              session-name
                                              "-s"
                                              screen-shell)))
-         term-buffer)
-    (setq term-buffer (-multi-term-get-buffer-ext))
-    (set-buffer term-buffer)
-    (rename-buffer (format "*%s*" session-name))
-    (multi-term-internal)
-    (switch-to-buffer term-buffer)
+         (term-buffer (-multi-term-ext-get-buffer)))
+    (with-current-buffer (-multi-term-ext-get-buffer)
+      (multi-term-ext-setup-tramp))
     term-buffer))
 
 ;; End:
