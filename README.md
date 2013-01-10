@@ -9,6 +9,7 @@ This package provides:
 * persistent terminal sessions using GNU screen.
 * terminal buffer on a remote hosts using ssh.
 * persistent terminal sessions on remote hosts using ssh and GNU screen.
+* the ability to create terminal profiles (common sessions you might have)
 
 ## Supported platforms
 
@@ -24,7 +25,7 @@ This package requires [multi-term.el](https://github.com/emacsmirrors/multi-term
 
 ## Usage
 
-This package provides 3 main interactive functions:
+This package provides 4 main interactive functions:
 
 * `multi-term-persistent` which asks for a GNU screen session name.
 
@@ -33,6 +34,9 @@ This package provides 3 main interactive functions:
 
 * `multi-term-remote-persistent` which asks for both a GNU screen
   session name and a SSH address.
+
+* `multi-term-profile` which asks for a profile name (previously
+  configured in the `multi-term-ext-profiles` variable.
 
 ### Customizations
 
