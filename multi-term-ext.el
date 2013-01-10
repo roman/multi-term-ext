@@ -61,6 +61,8 @@
 ;; * `multi-term-ext-remote-ssh-port' variable
 ;; * `multi-term-ext-profiles' variable
 ;; * `multi-term-ext-remote-host' variable
+;; * `multi-term-ext-setup-tramp-on-remote' variable
+;; * `multi-term-setup-tramp' function
 ;; * `multi-term-profile' function
 ;;
 ;;
@@ -100,6 +102,10 @@
 (defcustom multi-term-ext-remote-host nil
   "Default remote host SSH address (e.g user@host)."
   :type 'string)
+
+(defcustom multi-term-ext-setup-tramp-on-remote nil
+  "Indicates if you want TRAMP to work on remote terminals."
+  :type 'bool)
 
 (defcustom multi-term-ext-remote-ssh-port nil
   "Default SSH port."
@@ -231,8 +237,9 @@ user@host) value will be required to perform the connection."
                                        remote-port
                                        (list user+host)))
          (term-buffer (-multi-term-ext-get-buffer)))
-    (with-current-buffer term-buffer
-      (multi-term-ext-setup-tramp))
+    (if multi-term-ext-setup-tramp-on-remote
+        (with-current-buffer term-buffer
+          (multi-term-ext-setup-tramp)))
     term-buffer))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -293,9 +300,9 @@ a GNU screen session name."
                                              "-s"
                                              screen-shell)))
          (term-buffer (-multi-term-ext-get-buffer)))
-    (message (format "%s" multi-term-program-switches))
-    (with-current-buffer (-multi-term-ext-get-buffer)
-      (multi-term-ext-setup-tramp))
+    (if multi-term-ext-setup-tramp-on-remote
+        (with-current-buffer (-multi-term-ext-get-buffer)
+          (multi-term-ext-setup-tramp)))
     term-buffer))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
