@@ -57,6 +57,12 @@
 ;;
 
 ;;; Change log:
+;; 2013/01/09
+;; * `multi-term-ext-remote-ssh-port' variable
+;; * `multi-term-ext-profiles' variable
+;; * `multi-term-ext-remote-host' variable
+;; * `multi-term-profile' function
+;;
 ;;
 ;; 2012/12/31
 ;; * First released.
@@ -88,9 +94,33 @@
 ;;; Code:
 
 (defcustom multi-term-ext-screen-session-name nil
-  "Default GNU screen session name")
+  "Default GNU screen session name."
+  :type 'string)
+
 (defcustom multi-term-ext-remote-host nil
-  "Default remote host SSH address (e.g user@host)")
+  "Default remote host SSH address (e.g user@host)."
+  :type 'string)
+
+(defcustom multi-term-ext-remote-ssh-port nil
+  "Default SSH port."
+  :type 'string)
+
+(defcustom multi-term-ext-profiles nil
+  "List of known terminal profiles to connect to.
+
+  e.g
+
+  (setq multi-term-ext-profiles
+      '((\"python\" . ((multi-term-program \"/usr/bin/python\" )
+                       (multi-term-buffer-name \"python\")
+                       (multi-term-ext-screen-session-name \"python\")))
+
+        (\"vagrant+server\" . ((multi-term-ext-remote-host  \"vagrant@127.0.0.1\")
+                        (multi-term-ext-remote-ssh-port  \"2222\")
+                        (multi-term-buffer-name  \"vagrant-server\")
+                        (multi-term-ext-screen-session-name  \"\")))))"
+  :type '(alist :key-type string
+                :value-type (list (list string))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -133,6 +163,8 @@
         (multi-term-internal))
       (switch-to-buffer term-buffer)
       term-buffer)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;; derived from http://www.enigmacurry.com/2008/12/26/emacs-ansi-term-tricks/
 ;;; stolen from http://github.com/tavisrudd/emacs.d
@@ -179,24 +211,31 @@ clear
 echo \"tramp initialized\"
 ")))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defun multi-term-remote (&optional user+host buffer-name)
   "Creates a multi-term in a remote host. A user + host (e.g
 user@host) value will be required to perform the connection."
   (interactive)
   (let* ((user+host (or user+host
                         multi-term-ext-remote-host
-                        (read-from-minibuffer "SSH addeess (e.g user@host): ")))
+                        (read-from-minibuffer "SSH address (e.g user@host): ")))
+         (remote-port (if multi-term-ext-remote-ssh-port
+                          (list "-p" multi-term-ext-remote-ssh-port)))
          (multi-term-program "ssh")
          (multi-term-buffer-name (or buffer-name
                                      multi-term-buffer-name
                                      "remote-terminal"))
          (multi-term-program-switches (append
                                        multi-term-program-switches
+                                       remote-port
                                        (list user+host)))
          (term-buffer (-multi-term-ext-get-buffer)))
     (with-current-buffer term-buffer
       (multi-term-ext-setup-tramp))
     term-buffer))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun multi-term-persistent (&optional session-name buffer-name screen-shell)
   "Creates a multi-term inside a GNU screen session. A screen
@@ -216,7 +255,10 @@ session name is required."
                                               (list "-x" "-R"
                                                     "-S" session-name
                                                     "-s" screen-shell))))
+    (message (format "%s" multi-term-program-switches))
     (-multi-term-ext-get-buffer)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun multi-term-remote-persistent (&optional user+host session-name buffer-name screen-shell)
   "Creates multi-term buffer on a GNU screen session in a remote
@@ -231,13 +273,16 @@ a GNU screen session name."
                            (read-from-minibuffer "Program path: ")))
          (user+host (or user+host
                         multi-term-ext-remote-host
-                        (read-from-minibuffer "SSH addeess (e.g user@host): ")))
+                        (read-from-minibuffer "SSH address (e.g user@host): ")))
+         (remote-port (if multi-term-ext-remote-ssh-port
+                          (list "-p" multi-term-ext-remote-ssh-port)))
          (multi-term-buffer-name (or buffer-name
                                      multi-term-buffer-name
                                      session-name))
          (multi-term-program "ssh")
          (multi-term-program-switches (append
                                        multi-term-program-switches
+                                       remote-port
                                        (list user+host
                                              "-t"
                                              "screen"
@@ -248,9 +293,36 @@ a GNU screen session name."
                                              "-s"
                                              screen-shell)))
          (term-buffer (-multi-term-ext-get-buffer)))
+    (message (format "%s" multi-term-program-switches))
     (with-current-buffer (-multi-term-ext-get-buffer)
       (multi-term-ext-setup-tramp))
     term-buffer))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun multi-term-ext-start-profile (let-options)
+  "Starts a terminal session by providing a group of let options
+with `multi-term-*' variable settings"
+  (eval `(let ,let-options
+           (cond
+            (multi-term-ext-remote-host
+             (if (boundp 'multi-term-ext-screen-session-name)
+                 (multi-term-remote-persistent)
+               (multi-term-remote)))
+            (t
+             (if (boundp 'multi-term-ext-screen-session-name)
+                 (multi-term-persistent)
+               (multi-term)))))))
+
+(defun multi-term-profile (profile-name)
+  "Starts one of the terminal profiles specified in `multi-term-ext-profiles'"
+  (interactive
+   (list (ido-completing-read "Profile: "
+                              (mapcar #'car multi-term-ext-profiles))))
+  (let* ((let-options (cdr (assoc profile-name
+                                  multi-term-ext-profiles))))
+    (multi-term-ext-start-profile let-options)))
+
 
 ;; End:
 (provide 'multi-term-ext)
