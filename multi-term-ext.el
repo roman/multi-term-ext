@@ -262,7 +262,6 @@ session name is required."
                                               (list "-x" "-R"
                                                     "-S" session-name
                                                     "-s" screen-shell))))
-    (message (format "%s" multi-term-program-switches))
     (-multi-term-ext-get-buffer)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
