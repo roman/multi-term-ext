@@ -219,6 +219,12 @@ echo \"tramp initialized\"
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defun multi-term-ext ()
+  "Wrapper around normal multi-term that returns a buffer."
+  (-multi-term-ext-get-buffer))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defun multi-term-remote (&optional user+host buffer-name)
   "Creates a multi-term in a remote host. A user + host (e.g
 user@host) value will be required to perform the connection."
@@ -306,19 +312,25 @@ a GNU screen session name."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defun multi-term-open-terminal ()
+  "Opens a new terminal (either normal, remote, persistent or
+remote+persistent) depending on your global multi-term variable
+configuration."
+  (cond
+   (multi-term-ext-remote-host
+    (if multi-term-ext-screen-session-name
+        (multi-term-remote-persistent)
+      (multi-term-remote)))
+   (t
+    (if multi-term-ext-screen-session-name
+        (multi-term-persistent)
+      (multi-term-ext)))))
+
 (defun multi-term-ext-start-profile (let-options)
   "Starts a terminal session by providing a group of let options
 with `multi-term-*' variable settings"
   (eval `(let ,let-options
-           (cond
-            (multi-term-ext-remote-host
-             (if (boundp 'multi-term-ext-screen-session-name)
-                 (multi-term-remote-persistent)
-               (multi-term-remote)))
-            (t
-             (if (boundp 'multi-term-ext-screen-session-name)
-                 (multi-term-persistent)
-               (multi-term)))))))
+           (multi-term-open-terminal))))
 
 (defun multi-term-profile (profile-name)
   "Starts one of the terminal profiles specified in `multi-term-ext-profiles'"
