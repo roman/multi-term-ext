@@ -47,8 +47,8 @@
 ;; Below are the commands you can use:
 ;;
 ;; `multi-term-persistent' Creates a new local term buffer using a session on GNU screen.
-;; `multi-term-remote' Creates a new local term buffer using a session on GNU screen.
-;; `multi-term-remote-persistent' Creates a new local term buffer using a session on GNU screen.
+;; `multi-term-remote' Creates a new remote term buffer using an SSH address in the form of user@host.com.
+;; `multi-term-remote-persistent' Creates a new remote term buffer using an SSH address and a session on GNU screen.
 ;;
 ;; Variables that you can set:
 ;;
@@ -62,7 +62,7 @@
 ;; * `multi-term-ext-profiles' variable
 ;; * `multi-term-ext-remote-host' variable
 ;; * `multi-term-ext-setup-tramp-on-remote' variable
-;; * `multi-term-setup-tramp' function
+;; * `multi-term-ext-setup-tramp' function
 ;; * `multi-term-profile' function
 ;;
 ;;
